@@ -39,16 +39,16 @@ function getMaxDistribution(obj) {
 }
 
 function distance2Points(p1, p2) {
-    return Math.sqrt((parseInt(p2.x)-parseInt(p1.x))**2 + (parseInt(p2.y) - parseInt(p1.y))**2)
+    return Math.sqrt((+(p2.x)-+(p1.x))**2 + (+(p2.y) - +(p1.y))**2)
 }
 
 function distancePointLine(point, from_point, to_point) {
-    var x = point.x
-    var y = point.y
-    var x1 = from_point.x
-    var y1 = from_point.y
-    var x2 = to_point.x
-    var y2 = to_point.y
+    var x = +point.x
+    var y = +point.y
+    var x1 = +from_point.x
+    var y1 = +from_point.y
+    var x2 = +to_point.x
+    var y2 = +to_point.y
         
     var A = x - x1;
     var B = y - y1;
@@ -82,30 +82,121 @@ function distancePointLine(point, from_point, to_point) {
 }
 
 function pointOnSegment(A, B, C) {
-    epsilon = 0.0000001
-    return (-epsilon < distance2Points(B, A) + distance2Points(A, C) - distance2Points(B, C) < epsilon)
-}
-
-function orientation(p1, p2, p3) {
-    prod = (parseInt(p3.y)-parseInt(p1.y)) * (parseInt(p2.x)-parseInt(p1.x)) 
-    - (parseInt(p2.y)-parseInt(p1.y)) * (parseInt(p3.x)-parseInt(p1.x))
-    return Math.sign(prod)
+    if (distance2Points(A, B) + distance2Points(A, C) == distance2Points(C, B))
+        return true;
+    return false;
 }
 
 function segmentsIntersect(A, B, C, D) {
-    return orientation(A, B, C) * orientation(A, B, D) < 0 && orientation(C, D, A) * orientation(C, D, B) < 0
+    let a = +A.x
+    let b = +A.y
+    let c = +B.x
+    let d = +B.y
+    let p = +C.x
+    let q = +C.y
+    let r = +D.x
+    let s = +D.y
+    let det, gamma, lambda;
+    det = (c - a) * (s - q) - (r - p) * (d - b);
+    if (det === 0) {
+        return false;
+    } else {
+        lambda = ((s - q) * (r - a) + (p - r) * (s - b)) / det;
+        gamma = ((b - d) * (r - a) + (c - a) * (s - b)) / det;
+        return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
+    }
 }
 
 function middleBuildings(buildings, from, to){
-    return [...buildings.values()].filter((a) => +from.x <= +a.x && +a.x <= +to.x && +from.y <= +a.y && +a.y <= +to.y)
+    return buildings.filter((a) => Math.min(+from.x, +to.x) < +a.x && +a.x < Math.max(+from.x, +to.x)
+        && Math.min(+from.y, +to.y) < +a.y && +a.y < Math.max(+from.y, +to.y))
 }
 
-function splitTube(A, B, MiddlePointsList){
-    MiddlePointsList.sort((a, b) => distancePointLine(a, A, B) - distancePointLine(a, A, B))
-    console.error("MiddlePointsList2",MiddlePointsList)
-    for(let point of MiddlePointsList){
-        
+function getMonomial(A, B) {
+    var slope = (+B.y - +A.y) / (+B.x - +A.x);
+    return slope===Infinity || slope===-Infinity?("(y - "+ A.y+")"): (slope + "*(x - "+A.x+") - (y - "+ A.y+")")
+}
+
+function getSide(point, line){
+    return eval(line.replaceAll('x', point.x).replaceAll('y', point.y))>0?1:(eval(line.replaceAll('x', point.x).replaceAll('y', point.y))<0?-1:0)
+}
+
+function totalDistance(path) {
+    let dis = 0
+    for(let i = 0; i< path.length-1; i++){
+        dis+= distance2Points(path[i], path[i+1])
     }
+    return dis
+}
+
+function splitTube(A, B, MiddlePointsList, resources, existed_tubes){
+    MiddlePointsList.sort((a, b) => distancePointLine(a, A, B) - distancePointLine(b, A, B) || +a.x - +b.x || +a.y - +b.y)
+    // let split_to = 2
+    // if(MiddlePointsList.length !=0){
+    //     let monomial_line = getMonomial(A, B)
+    //     let first_ele = MiddlePointsList.shift()
+    //     let get_side = getSide(first_ele, monomial_line)
+    //     MiddlePointsList = MiddlePointsList.filter(a => getSide(a, monomial_line) == get_side)
+    // }
+    let dir = [1, 1]
+    if(+A.x > +B.x) dir[0] = -1
+    if(+A.y > +B.y) dir[1] = -1
+    console.error("existed_tube:", existed_tube)
+    let alternativeMiddlePoint = [MiddlePointsList.at(0), MiddlePointsList.at(1)].sort((a,b)=> (+a.x - +b.x)*dir[0] || (+a.y - +b.y)*dir[1])
+    let path = [A].concat(alternativeMiddlePoint).concat([B])
+    for(let i = 0; i< path.length-1; i++){
+        for(let tube of existed_tubes) {
+            if(segmentsIntersect(tube[0],tube[1],path[i],path[i+1])) {
+                // console.error("existed_tube:", tube[0].id,tube[1].id,path[i].id,path[i+1].id)
+                // console.error("tube0:", tube[0].id,"tube1:", tube[1].id)
+                alternativeMiddlePoint.splice(alternativeMiddlePoint.indexOf(path[i])+1, 0, tube[0])
+                path = [A].concat(alternativeMiddlePoint).concat([B])
+                // for(j=0; j<path.length; j++){
+                //     console.error(path[j].id)
+                // }
+                // console.error("******")
+                // console.error(tube[0].id,tube[1].id,path.at(-2).id,path.at(-1).id)
+            }
+        }
+    }
+    for(z=0; z<path.length; z++){
+        console.error(path[z].id)
+    }
+    console.error("WWWWWWW")
+    for(let j = 0; j< path.length-1; j++){
+        console.error(path[j].id, path[j+1].id, MiddlePointsList)
+        let temp_MiddlePointsList = middleBuildings(MiddlePointsList, path[j], path[j+1])
+        console.error(temp_MiddlePointsList, path[j].id, path[j+1].id)
+        for (let b of temp_MiddlePointsList){
+            if(pointOnSegment(b, path[j], path[j+1])) {
+                console.error(b.id, path[j].id, path[j+1].id)
+                alternativeMiddlePoint.splice(alternativeMiddlePoint.indexOf(path[j])+1, 0, b)
+                path = [A].concat(alternativeMiddlePoint).concat([B])
+            }
+        }
+    }
+    for(z=0; z<path.length; z++){
+        console.error(path[z].id)
+    }
+    console.error("_________")
+    return path
+}
+
+function generateTubeAndPod(path, pod_index) {
+    let return_path = ""
+    let pod_path = [path[0].id]
+    for(let i = 0; i < path.length-1; i++){
+        if(path[i].id != path[i+1].id){
+            return_path += "TUBE "+ path[i].id + " " + path[i+1].id + ";";
+            pod_path.push(path[i+1].id)
+        }
+    
+    }
+    let reverse_pod_path = [].concat(pod_path).reverse();
+    reverse_pod_path.shift()
+    return_path += "POD " + pod_index + " " + pod_path.concat(reverse_pod_path).join(' ') +"; "
+    // console.error(return_path)
+    return return_path
 }
 //end of alternative functions
 
@@ -122,6 +213,7 @@ let existed_tube = []
 // game loop
 while (true) {
     result = ""
+    landing_pads = []
     let resources = parseInt(readline());
     console.error("resources:", resources)
     const numTravelRoutes = parseInt(readline());
@@ -145,9 +237,10 @@ while (true) {
         //save building location
         building_locations.set(
             buildingProperties[1], {
+                "id" : buildingProperties[1],
                 "x":buildingProperties[2], 
-                "y":buildingProperties[3],
-                "connected_tube" : 0}
+                "y":buildingProperties[3], 
+                "connected_tube": 0}
             )
         // Save landing pads information
         if(buildingProperties[0] == '0') {
@@ -179,6 +272,7 @@ while (true) {
             }
         }
     }
+    landing_pads = [...new Set(landing_pads)]
     //Sort landing pads based on type of astronaults 
     landing_pads.sort((a,b)=> [...new Set(a.astronaults)].length - [...new Set(b.astronaults)].length ||
         getMaxDistribution(getFrequencies(b.astronaults)) - getMaxDistribution(getFrequencies(a.astronaults)))
@@ -199,44 +293,36 @@ while (true) {
     for (let info of sorted_on_dis_types) {
         pad = landing_pads.filter(a => a.id === info[0].id)[0]
         let temp_distance2Points = Infinity
-        let to_building;
-            // console.error(buildings, astronault_type)
-            temp_distance2Points = Infinity
-            for(let building of buildings.get(info[0].type)){
-                // console.error("aaaa",temp_distance2Points,info[0].type, distance2Points(pad, building), building)
-                if(temp_distance2Points > distance2Points(pad, building)) {
-                    temp_distance2Points = distance2Points(pad, building)
-                    to_building = building
+        let to_building =  undefined;
+        // console.error(buildings, astronault_type)
+        for(let building of buildings.get(info[0].type)){
+            // console.error("aaaa",temp_distance2Points,info[0].type, distance2Points(pad, building), building)
+            if(temp_distance2Points > distance2Points(pad, building)) {
+                temp_distance2Points = distance2Points(pad, building)
+                to_building = building
+            }
+        }
+            // console.error("existed_tube:",existed_tube)
+            // console.error(middleBuildings([...building_locations.values()], pad, to_building))
+            path = splitTube(pad, to_building, [...building_locations.values()], resources, existed_tube)
+            for(let z = 0; z<path.length-1; z++){
+                if(path[z].id != path[z+1].id) {
+                    existed_tube.push([path[z], path[z+1]])
                 }
             }
-            // console.error(middleBuildings(building_locations, pad, to_building))
-            splitTube(pad, to_building, middleBuildings(building_locations, pad, to_building))
-            let no_building = true;
-            let no_tube = true;
-            if(to_building) {
-                for (let b of middleBuildings(building_locations, pad, to_building)) {
-                    if(pointOnSegment({"x": b[0], "y": b[1]}, pad, to_building)) 
-                        no_building = false
-                }
-                for (let tube of travel_routes) {
-                    console.error("inside",Object.values(building_locations.get(tube[0])))
-                    if(segmentsIntersect(pad, to_building, Object.values(building_locations.get(tube[0])), Object.values(building_locations.get(tube[1]) ))) 
-                        no_tube=false
-                }
-                if(temp_distance2Points != Infinity && no_building && no_tube && !includesArr(travel_routes, [pad.id.toString(), to_building.id.toString()]) ) {
-                    console.error(to_building)
-                    existed_tube.push([pad.id, to_building.id])
-                    // console.error(resources, temp_distance2Points , 1000)
-                    if(resources >= (temp_distance2Points*10) + 1000) {
-                        resources = resources - (temp_distance2Points*10) - 1000
-                        result+= "TUBE "+ pad.id + " " + to_building.id + ";" + "POD " + pod_index + " " + pad.id + " " + to_building.id +" "+ pad.id +"; "
-                        pod_index++;
-                    }
-                }
+            existed_tube = [...new Set(existed_tube)]
+            if(path && resources >= (totalDistance(path)*10) + 1000) {
+                resources = resources - (totalDistance(path)*10) - 1000
+                // result+= "TUBE "+ pad.id + " " + to_building.id + ";" + "POD " + pod_index + " " + pad.id + " " + to_building.id +" "+ pad.id +"; "
+                result += generateTubeAndPod(path, pod_index)
+                pod_index++;
             }
+            else break
+                // }
     }
 
     console.log(result!=""?result:"WAIT");
+    path = []
                 // "TUBE 0 28; TUBE 0 27;TUBE 0 26;TUBE 0 25;TUBE 0 24;TUBE 0 23"
      // TUBE | UPGRADE | TELEPORT | POD | DESTROY | WAIT
 //     console.log("TUBE "+ '121' + " " + '11' + ";" + "POD " + '0' + " " + '121' + " " + '11' +" "+ '121' +"; " +
